@@ -4,6 +4,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PyABSA Dataset Preparation Tool v1.07</title>
 <head>
+    <script src="DPT/FileSaver.js-master/dist/FileSaver.min.js"></script>
+    <script src="DPT/FileSaver.js-master/dist/FileSaver.min.js.map"></script>
+    <script src="DPT/FileSaver.js-master/dist/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse"></script>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
@@ -75,6 +78,8 @@
     </script>
 </head>
 <body>
+    <script src="DPT/FileSaver.js-master/dist/FileSaver.min.js"></script>
+    <script src="DPT/FileSaver.js-master/dist/FileSaver.min.js.map"></script>
 <div id='ABSADPT'>
     <div class="container">
         <br>
@@ -557,109 +562,100 @@
                 });
             },
             SaveResult: function () {
-                let ABSATrainingSet = _.chain(ABSADPT.PreABSAData)
-                    .values()
-                    .flatten()
-                    .map((v) => _.flatten(_.values(_.pick(v, "rvarr"))))
-                    .map((v) => {
-                        let aspectIdx = _.keys(_.pickBy(v, {aspect: true})),
-                            rs = [];
-                        if (_.size(aspectIdx) == 0) {
-                            sentence = (v.map((v, i) => i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk)).join("");
-                            sentiment = [];
-                            rs = {sentence: sentence, sentiment: sentiment};
-                        } else {
-                            let vCopy = _.cloneDeep(v);
-                            _.each(aspectIdx, (aIdx) => {
-                                let temp = _.chain(vCopy)
-                                    .map((wtk, i) => {
-                                        if (wtk.aspect && i == +aIdx) {
-                                            wtk.tkFinal = "$T$";
-                                        } else {
-                                            wtk.tkFinal = wtk.tk;
-                                        }
-                                        return wtk;
-                                    })
-                                    .value();
-                                sentence = (temp.map((v, i) => i == 0 || v.tkFinal == "" ? v.tkFinal : !v.tkFinal.match(/\p{P}/gu) ? ' ' + v.tkFinal : v.tkFinal)).join("");
-                                sentiment = _.chain(temp)
-                                    .pickBy({aspect: true})
-                                    .result(aIdx)
-                                    .pick(["tk", "sentiment"])
-                                    .value();
-                                rs.push({sentence: sentence, sentiment: [sentiment]});
-                            });
-                        }
-
-                        return rs;
-                    })
-                    .flatten()
-                    .map((v) => {
-                        let rs = [];
-                        if (_.size(v.sentiment) == 0) {
-                            rs.push(v.sentence)
-                        } else {
-                            _.each(v.sentiment, (senti) => {
-                                rs.push(v.sentence)
-                                rs.push(senti.tk)
-                                if (senti.sentiment == "Pos")
-                                    rs.push("Positive");
-                                else if (senti.sentiment == "Neu")
-                                    rs.push("Neutral");
-                                else if (senti.sentiment == "Neg")
-                                    rs.push("Negative");
-                            });
-                        }
-                        return rs;
-                    })
-                    .flattenDeep()
-                    .value();
-
-                let SATrainingSet = Papa.unparse(
-                    JSON.stringify(_.chain(ABSADPT.PreABSAData)
-                        .values()
-                        .flatten()
-                        .map((v) => _.flatten(_.values(_.pick(v, ["rvarr", "Overall"]))))
-                        .map((v) => {
-                            sentence = (v.map((v, i) => {
-                                if (_.isObject(v))
-                                    return i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk;
-                            })).join("");
-                            sentiment = _.chain(v)
-                                .reject(_.isObject)
-                                .first()
-                                .value();
-                            if (sentiment == "Pos")
-                                sentiment = "Positive";
-                            else if (sentiment == "Neu")
-                                sentiment = "Neutral";
-                            else if (sentiment == "Neg")
-                                sentiment = "Negative";
-
-                            return {sentence: sentence, overall: sentiment};
+    let ABSATrainingSet = _.chain(ABSADPT.PreABSAData)
+        .values()
+        .flatten()
+        .map((v) => _.flatten(_.values(_.pick(v, "rvarr"))))
+        .map((v) => {
+            let aspectIdx = _.keys(_.pickBy(v, {aspect: true})),
+                rs = [];
+            if (_.size(aspectIdx) == 0) {
+                let sentence = (v.map((v, i) => i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk)).join("");
+                let sentiment = [];
+                rs = {sentence: sentence, sentiment: sentiment};
+            } else {
+                let vCopy = _.cloneDeep(v);
+                _.each(aspectIdx, (aIdx) => {
+                    let temp = _.chain(vCopy)
+                        .map((wtk, i) => {
+                            if (wtk.aspect && i == +aIdx) {
+                                wtk.tkFinal = wtk.tk;
+                            } else {
+                                wtk.tkFinal = wtk.tk;
+                            }
+                            return wtk;
                         })
-                        .value()
-                    ),
-                    {
-                        delimiter: ",",
-                        header: true,
-                        worker: true
-                    }
-                );
-
-                localStorage.setItem("lastsave", LZipper.compress(JSON.stringify(this.PreABSAData)));
-
-                let saveAs = window.saveAs,
-                    blob1 = new Blob([ABSATrainingSet.join("\r\n")], {type: "text/plain"}),
-                    blob2 = new Blob([SATrainingSet], {type: "text/csv"}),
-                    blob3 = new Blob([JSON.stringify(this.PreABSAData)], {type: "application/json"});
-                saveAs(blob1, "custom.apc.train.txt");
-                saveAs(blob2, "SATrainingSet.csv");
-                saveAs(blob3, "ABSADataWorkFile.json");
+                        .value();
+                    let sentence = (temp.map((v, i) => i == 0 || v.tkFinal == "" ? v.tkFinal : !v.tkFinal.match(/\p{P}/gu) ? ' ' + v.tkFinal : v.tkFinal)).join("");
+                    let sentiment = _.chain(temp)
+                        .pickBy({aspect: true})
+                        .result(aIdx)
+                        .pick(["tk", "sentiment"])
+                        .value();
+                    rs.push({sentence: sentence, sentiment: [sentiment], aspectIdx: +aIdx});
+                });
             }
+
+            return rs;
+        })
+        .flatten()
+        .groupBy('sentence')
+        .map((value, key) => {
+            let sentiments = _.map(value, 'sentiment').flat();
+            let formattedSentence = key;
+
+            // Replace each aspect token with the correct format tag
+            sentiments.forEach(senti => {
+                let aspectToken = senti.tk;
+                let aspectStart = formattedSentence.indexOf(aspectToken);
+                let aspectEnd = aspectStart + aspectToken.length - 1;
+                let sentimentLabel = senti.sentiment == "Pos" ? "p" : senti.sentiment == "Neu" ? "neu" : "neg";
+                let aspectTag = `[${aspectStart},${aspectEnd},${sentimentLabel}]`;
+
+                // Insert the tag after the aspect token
+                formattedSentence = formattedSentence.substring(0, aspectEnd + 1) +
+                    aspectTag +
+                    formattedSentence.substring(aspectEnd + 1);
+            });
+            // Replace newline characters with periods
+            formattedSentence = formattedSentence.replace(/\n+/g, '.');
+
+            return formattedSentence;
+        })
+        .value();
+
+    // Convert data to CSV format with a single column
+    let SATrainingSet = Papa.unparse(
+        ABSATrainingSet.map(sentence => ({ sentence: `"${sentence}"` })),
+        {
+            delimiter: ",",
+            header: false,  // No header since we're saving one column of data
+            quotes: true,  // Ensure quoting is handled properly
+            skipEmptyLines: true, // Skip any empty lines
+            escapeChar: '"',  // Escape any internal quotes
+        }
+    );
+
+
+    let saveAs = window.saveAs,
+        blob = new Blob([SATrainingSet], { type: "text/csv" });
+    saveAs(blob, "SATrainingSet.csv");
+}
         },
         watch: {}
     });
+    function disposeTooltip(element) {
+            if (element) {
+                const closestElement = element.closest('.tooltip-selector');
+                if (closestElement) {
+                    // proceed with dispose logic
+                } else {
+                    console.error('Closest element not found');
+                }
+            } else {
+                console.error('Element not found');
+            }
+        }
 </script>
 </body>
 </html>   
