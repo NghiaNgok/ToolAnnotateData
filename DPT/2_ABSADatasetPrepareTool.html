@@ -137,7 +137,6 @@
             </thead>
             <tbody>
             <tr v-for="(PageArrays, PageIdx) in PreABSAData[CurrPage]" :key="CurrPage+'-'+PageIdx">
-                <!--<th scope="row" style="width:80px;">{{ index+1+100*(CurrPage-1) }}</th><td> <span class="wtoken" v-html="item"></span> </td>-->
                 <th scope="row" style="width:80px;">{{ PageArrays.rvid }}</th>
                 <td>
 								<span class="wtoken">
@@ -240,14 +239,6 @@
     }, r
 }();</script>
 <script>
-    /*
-        to-do: change to Vue reusable component
-        Vue.component('tkspan', {
-            props: ['tk'],
-            template: ``
-        });
-    */
-
     var ABSADPT = new Vue({
         el: '#ABSADPT',
         data: {
@@ -275,8 +266,6 @@
             DisplayTable: function () {
                 this.vConFooter = false;
                 this.TableReady = true;
-                //ABSADPT.ProcessedABSAData = $('.table').tableToJSON();
-                //localStorage.setItem("lastname", "Smith");
             },
             OverallClass: function (v) {
                 return "form-select form-select-sm " + (!v ? "" : "OverallMarked a-" + v);
@@ -304,12 +293,10 @@
             TokenHighlight: function (target, PageArrays, item, index) {
                 var tkspanid = target.id, TkPopover;
 
-                //if has sentiment defined then not toggleClass active
                 if (!$(target).attr('class').match(/a-Pos|a-Neu|a-Neg/)) {
                     $(target).toggleClass("active");
                 }
                 if (($(target).next("span").hasClass("active") && _.size($(target).next("span").attr("data-id-merged")) < 12) || ($(target).prev("span").hasClass("active") && _.size($(target).prev("span").attr("data-id-merged")) < 12)) {
-                    //prev word or next word is aspect, then ask to merge
                     TkPopover = bootstrap.Popover.getOrCreateInstance(target, {
                         placement: "top",
                         trigger: "manual",
@@ -503,7 +490,6 @@
                     console["info"]("     Errors:", rs.errors.length);
                     this.DataReady = true;
                     this.RawABSAData = Object.freeze(_.flattenDeep(rs.data));
-                    //PageNum is array of objects, key by index of Pagination, each Pagination contain 10 pages, each pages contain 100 rows of table
                     this.PageNum = _.extend.apply({},
                         _.chain(this.Range(1, this.MaxPagina))
                             .map((v, i) => {
@@ -515,7 +501,6 @@
                             })
                             .value()
                     );
-                    // let wtoken = _.map(this.RawABSAData, (v) => v.split(/\s*\b\s*/));
                     let wtoken = _.map(this.RawABSAData, (v) => v.split(' '));
                     this.PreABSAData = _.extend.apply({},
                         _.chain(wtoken)
@@ -526,7 +511,11 @@
                                     return {
                                         rvid: rvid,
                                         rvarr: _.map(rvarr, (tk, tkid) => ({tkid: "R" + rvid + "_" + tkid, tk: tk})),
-                                        Overall: ''
+                                        Overall: '',
+                                        Aspect1: '',
+                                        Sentiment1: '',
+                                        Aspect2: '',
+                                        Sentiment2: ''
                                     }
                                 });
                                 return {[i + 1]: rv};
@@ -560,85 +549,23 @@
                 let ABSATrainingSet = _.chain(ABSADPT.PreABSAData)
                     .values()
                     .flatten()
-                    .map((v) => _.flatten(_.values(_.pick(v, "rvarr"))))
                     .map((v) => {
-                        let aspectIdx = _.keys(_.pickBy(v, {aspect: true})),
-                            rs = [];
-                        if (_.size(aspectIdx) == 0) {
-                            let sentence = (v.map((v, i) => i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk)).join("");
-                            let sentiment = [];
-                            rs = {sentence: sentence, sentiment: sentiment};
-                        } else {
-                            let vCopy = _.cloneDeep(v);
-                            _.each(aspectIdx, (aIdx) => {
-                                let temp = _.chain(vCopy)
-                                    .map((wtk, i) => {
-                                        if (wtk.aspect && i == +aIdx) {
-                                            wtk.tkFinal = "$T$";
-                                        } else {
-                                            wtk.tkFinal = wtk.tk;
-                                        }
-                                        return wtk;
-                                    })
-                                    .value();
-                                let sentence = (temp.map((v, i) => i == 0 || v.tkFinal == "" ? v.tkFinal : !v.tkFinal.match(/\p{P}/gu) ? ' ' + v.tkFinal : v.tkFinal)).join("");
-                                let sentiment = _.chain(temp)
-                                    .pickBy({aspect: true})
-                                    .result(aIdx)
-                                    .pick(["tk", "sentiment"])
-                                    .value();
-                                rs.push({sentence: sentence, sentiment: [sentiment]});
-                            });
-                        }
-                        return rs;
+                        let aspects = v.rvarr.filter(item => item.aspect);
+                        let aspectData = {
+                            sentence: v.rvarr.map(item => item.tk).join(" "),
+                            overall: v.Overall,
+                        };
+            
+                        aspects.forEach((aspectItem, index) => {
+                            aspectData[`aspect${index + 1}`] = aspectItem.tk;
+                            aspectData[`sentiment${index + 1}`] = aspectItem.sentiment;
+                        });
+            
+                        return aspectData;
                     })
-                    .flatten()
                     .value();
             
-                let csvContent = [];
-                csvContent.push(["sentence", "aspect1", "sentiment1", "aspect2", "sentiment2", "overall_sentiment"]);
-            
-                let sentences = {};
-            
-                ABSATrainingSet.forEach((v) => {
-                    let sentence = v.sentence;
-                    let aspects = v.sentiment.map(senti => senti.tk);
-                    let sentiments = v.sentiment.map(senti => senti.sentiment == "Pos" ? "Positive" : senti.sentiment == "Neu" ? "Neutral" : "Negative");
-            
-                    if (!sentences[sentence]) {
-                        sentences[sentence] = { aspects: [], sentiments: [] };
-                    }
-            
-                    sentences[sentence].aspects.push(...aspects);
-                    sentences[sentence].sentiments.push(...sentiments);
-                });
-            
-                _.each(sentences, (value, key) => {
-                    let row = [key];
-                    row.push(value.aspects[0] || "", value.sentiments[0] || "");
-                    row.push(value.aspects[1] || "", value.sentiments[1] || "");
-                    row.push(""); // Placeholder for overall sentiment
-                    csvContent.push(row);
-                });
-            
-                // Add overall sentiment for each sentence
-                _.each(csvContent, (row, index) => {
-                    if (index > 0) { // Skip header
-                        let sentence = row[0];
-                        let overall_sentiment = _.chain(ABSADPT.PreABSAData)
-                            .values()
-                            .flatten()
-                            .find((v) => {
-                                let fullSentence = (v.rvarr.map((word, i) => i == 0 || word.tk == "" ? word.tk : !word.tk.match(/\p{P}/gu) ? ' ' + word.tk : word.tk)).join("");
-                                return fullSentence === sentence;
-                            })
-                            .get('Overall')
-                            .value();
-                        row[5] = overall_sentiment == "Pos" ? "Positive" : overall_sentiment == "Neu" ? "Neutral" : overall_sentiment == "Neg" ? "Negative" : "";
-                    }
-                });
-            
-                let csvString = Papa.unparse(csvContent, {
+                let SATrainingSet = Papa.unparse(ABSATrainingSet, {
                     delimiter: ",",
                     header: true,
                     worker: true
@@ -647,14 +574,15 @@
                 localStorage.setItem("lastsave", LZipper.compress(JSON.stringify(this.PreABSAData)));
             
                 let saveAs = window.saveAs,
-                    blob1 = new Blob([csvString], {type: "text/csv;charset=utf-8"});
+                    blob1 = new Blob([SATrainingSet], {type: "text/csv"}),
+                    blob2 = new Blob([JSON.stringify(this.PreABSAData)], {type: "application/json"});
+            
                 saveAs(blob1, "SATrainingSet.csv");
             }
             
-                                        
         },
         watch: {}
     });
 </script>
 </body>
-</html>   
+</html>
