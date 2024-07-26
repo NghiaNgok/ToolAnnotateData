@@ -565,8 +565,8 @@
                         let aspectIdx = _.keys(_.pickBy(v, {aspect: true})),
                             rs = [];
                         if (_.size(aspectIdx) == 0) {
-                            sentence = (v.map((v, i) => i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk)).join("");
-                            sentiment = [];
+                            let sentence = (v.map((v, i) => i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk)).join("");
+                            let sentiment = [];
                             rs = {sentence: sentence, sentiment: sentiment};
                         } else {
                             let vCopy = _.cloneDeep(v);
@@ -581,8 +581,8 @@
                                         return wtk;
                                     })
                                     .value();
-                                sentence = (temp.map((v, i) => i == 0 || v.tkFinal == "" ? v.tkFinal : !v.tkFinal.match(/\p{P}/gu) ? ' ' + v.tkFinal : v.tkFinal)).join("");
-                                sentiment = _.chain(temp)
+                                let sentence = (temp.map((v, i) => i == 0 || v.tkFinal == "" ? v.tkFinal : !v.tkFinal.match(/\p{P}/gu) ? ' ' + v.tkFinal : v.tkFinal)).join("");
+                                let sentiment = _.chain(temp)
                                     .pickBy({aspect: true})
                                     .result(aIdx)
                                     .pick(["tk", "sentiment"])
@@ -590,73 +590,68 @@
                                 rs.push({sentence: sentence, sentiment: [sentiment]});
                             });
                         }
-
                         return rs;
                     })
                     .flatten()
-                    .map((v) => {
-                        let rs = [];
-                        if (_.size(v.sentiment) == 0) {
-                            rs.push(v.sentence)
-                        } else {
-                            _.each(v.sentiment, (senti) => {
-                                rs.push(v.sentence)
-                                rs.push(senti.tk)
-                                if (senti.sentiment == "Pos")
-                                    rs.push("Positive");
-                                else if (senti.sentiment == "Neu")
-                                    rs.push("Neutral");
-                                else if (senti.sentiment == "Neg")
-                                    rs.push("Negative");
-                            });
-                        }
-                        return rs;
-                    })
-                    .flattenDeep()
                     .value();
-
-                let SATrainingSet = Papa.unparse(
-                    JSON.stringify(_.chain(ABSADPT.PreABSAData)
-                        .values()
-                        .flatten()
-                        .map((v) => _.flatten(_.values(_.pick(v, ["rvarr", "Overall"]))))
-                        .map((v) => {
-                            sentence = (v.map((v, i) => {
-                                if (_.isObject(v))
-                                    return i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk;
-                            })).join("");
-                            sentiment = _.chain(v)
-                                .reject(_.isObject)
-                                .first()
-                                .value();
-                            if (sentiment == "Pos")
-                                sentiment = "Positive";
-                            else if (sentiment == "Neu")
-                                sentiment = "Neutral";
-                            else if (sentiment == "Neg")
-                                sentiment = "Negative";
-
-                            return {sentence: sentence, overall: sentiment};
-                        })
-                        .value()
-                    ),
-                    {
-                        delimiter: ",",
-                        header: true,
-                        worker: true
+            
+                let csvContent = [];
+                csvContent.push(["sentence", "aspect1", "sentiment1", "aspect2", "sentiment2", "overall_sentiment"]);
+            
+                let sentences = {};
+            
+                ABSATrainingSet.forEach((v) => {
+                    let sentence = v.sentence;
+                    let aspects = v.sentiment.map(senti => senti.tk);
+                    let sentiments = v.sentiment.map(senti => senti.sentiment == "Pos" ? "Positive" : senti.sentiment == "Neu" ? "Neutral" : "Negative");
+            
+                    if (!sentences[sentence]) {
+                        sentences[sentence] = { aspects: [], sentiments: [] };
                     }
-                );
-
+            
+                    sentences[sentence].aspects.push(...aspects);
+                    sentences[sentence].sentiments.push(...sentiments);
+                });
+            
+                _.each(sentences, (value, key) => {
+                    let row = [key];
+                    row.push(value.aspects[0] || "", value.sentiments[0] || "");
+                    row.push(value.aspects[1] || "", value.sentiments[1] || "");
+                    row.push(""); // Placeholder for overall sentiment
+                    csvContent.push(row);
+                });
+            
+                // Add overall sentiment for each sentence
+                _.each(csvContent, (row, index) => {
+                    if (index > 0) { // Skip header
+                        let sentence = row[0];
+                        let overall_sentiment = _.chain(ABSADPT.PreABSAData)
+                            .values()
+                            .flatten()
+                            .find((v) => {
+                                let fullSentence = (v.rvarr.map((word, i) => i == 0 || word.tk == "" ? word.tk : !word.tk.match(/\p{P}/gu) ? ' ' + word.tk : word.tk)).join("");
+                                return fullSentence === sentence;
+                            })
+                            .get('Overall')
+                            .value();
+                        row[5] = overall_sentiment == "Pos" ? "Positive" : overall_sentiment == "Neu" ? "Neutral" : overall_sentiment == "Neg" ? "Negative" : "";
+                    }
+                });
+            
+                let csvString = Papa.unparse(csvContent, {
+                    delimiter: ",",
+                    header: true,
+                    worker: true
+                });
+            
                 localStorage.setItem("lastsave", LZipper.compress(JSON.stringify(this.PreABSAData)));
-
+            
                 let saveAs = window.saveAs,
-                    blob1 = new Blob([ABSATrainingSet.join("\r\n")], {type: "text/plain"}),
-                    blob2 = new Blob([SATrainingSet], {type: "text/csv"}),
-                    blob3 = new Blob([JSON.stringify(this.PreABSAData)], {type: "application/json"});
-                saveAs(blob1, "custom.apc.train.txt");
-                saveAs(blob2, "SATrainingSet.csv");
-                saveAs(blob3, "ABSADataWorkFile.json");
+                    blob1 = new Blob([csvString], {type: "text/csv;charset=utf-8"});
+                saveAs(blob1, "SATrainingSet.csv");
             }
+            
+                                        
         },
         watch: {}
     });
