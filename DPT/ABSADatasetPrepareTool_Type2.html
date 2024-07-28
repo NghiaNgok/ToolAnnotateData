@@ -617,25 +617,32 @@
                     aspectTag +
                     formattedSentence.substring(aspectEnd + 1);
             });
+
+            // Calculate overall sentiment (e.g., majority vote)
+            let sentimentCounts = _.countBy(sentiments, 'sentiment');
+            let overallSentiment = _.maxBy(Object.keys(sentimentCounts), o => sentimentCounts[o]);
+
             // Replace newline characters with periods
             formattedSentence = formattedSentence.replace(/\n+/g, '.');
 
-            return formattedSentence;
+            return {
+                sentence: formattedSentence,
+                overallSentiment: overallSentiment
+            };
         })
         .value();
 
-    // Convert data to CSV format with a single column
+    // Convert data to CSV format with two columns
     let SATrainingSet = Papa.unparse(
-        ABSATrainingSet.map(sentence => ({ sentence: `"${sentence}"` })),
+        ABSATrainingSet,
         {
             delimiter: ",",
-            header: false,  // No header since we're saving one column of data
+            header: true,  // Add header to the CSV
             quotes: true,  // Ensure quoting is handled properly
             skipEmptyLines: true, // Skip any empty lines
             escapeChar: '"',  // Escape any internal quotes
         }
     );
-
 
     let saveAs = window.saveAs,
         blob = new Blob([SATrainingSet], { type: "text/csv" });
