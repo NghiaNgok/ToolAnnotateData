@@ -561,6 +561,7 @@
                     });
                 });
             },
+
             SaveResult: function () {
     let ABSATrainingSet = _.chain(ABSADPT.PreABSAData)
         .values()
@@ -609,7 +610,7 @@
                 let aspectToken = senti.tk;
                 let aspectStart = formattedSentence.indexOf(aspectToken);
                 let aspectEnd = aspectStart + aspectToken.length - 1;
-                let sentimentLabel = senti.sentiment == "Pos" ? "p" : senti.sentiment == "Neu" ? "neu" : "neg";
+                let sentimentLabel = senti.sentiment == "Pos" ? "p" : senti.sentiment == "Neu" ? "n" : "neg";
                 let aspectTag = `[${aspectStart},${aspectEnd},${sentimentLabel}]`;
 
                 // Insert the tag after the aspect token
@@ -618,36 +619,59 @@
                     formattedSentence.substring(aspectEnd + 1);
             });
 
-            // Calculate overall sentiment (e.g., majority vote)
-            let sentimentCounts = _.countBy(sentiments, 'sentiment');
-            let overallSentiment = _.maxBy(Object.keys(sentimentCounts), o => sentimentCounts[o]);
+            // Replace newline characters with spaces
+            formattedSentence = formattedSentence.replace(/\n+/g, ' ').replace(/\s+/g, ' ');
 
-            // Replace newline characters with periods
-            formattedSentence = formattedSentence.replace(/\n+/g, '.');
-
-            return {
-                sentence: formattedSentence,
-                overallSentiment: overallSentiment
-            };
+            return formattedSentence;
         })
         .value();
 
-    // Convert data to CSV format with two columns
-    let SATrainingSet = Papa.unparse(
-        ABSATrainingSet,
-        {
-            delimiter: ",",
-            header: true,  // Add header to the CSV
-            quotes: true,  // Ensure quoting is handled properly
-            skipEmptyLines: true, // Skip any empty lines
-            escapeChar: '"',  // Escape any internal quotes
-        }
-    );
+    let SATrainingSet = _.map(ABSATrainingSet, sentence => ({ sentence: sentence }));
+
+    let SATrainingSet2 = _.chain(ABSADPT.PreABSAData)
+        .values()
+        .flatten()
+        .map((v) => _.flatten(_.values(_.pick(v, ["rvarr", "Overall"]))))
+        .map((v) => {
+            let sentence = (v.map((v, i) => {
+                if (_.isObject(v))
+                    return i == 0 || v.tk == "" ? v.tk : !v.tk.match(/\p{P}/gu) ? ' ' + v.tk : v.tk;
+            })).join("");
+            let sentiment = _.chain(v)
+                .reject(_.isObject)
+                .first()
+                .value();
+            if (sentiment == "Pos")
+                sentiment = "p";
+            else if (sentiment == "Neu")
+                sentiment = "neu";
+            else if (sentiment == "Neg")
+                sentiment = "neg";
+
+            return {sentence: sentence, overall: sentiment};
+        })
+        .value();
+
+    // Combine SATrainingSet and SATrainingSet2
+    let combinedTrainingSet = SATrainingSet.map((item, index) => {
+        let correspondingItem = SATrainingSet2[index] || {};
+        return { sentence: item.sentence, overall: correspondingItem.overall || "" };
+    });
+
+    // Convert combined data to CSV format
+    let combinedCSV = Papa.unparse(combinedTrainingSet, {
+        delimiter: ",",
+        header: true,
+        quotes: true,
+        skipEmptyLines: true,
+        escapeChar: '"',
+    });
 
     let saveAs = window.saveAs,
-        blob = new Blob([SATrainingSet], { type: "text/csv" });
-    saveAs(blob, "SATrainingSet.csv");
+        blob = new Blob([combinedCSV], { type: "text/csv" });
+    saveAs(blob, "TrainingSet.csv");
 }
+
         },
         watch: {}
     });
