@@ -610,7 +610,7 @@
                 let aspectToken = senti.tk;
                 let aspectStart = formattedSentence.indexOf(aspectToken);
                 let aspectEnd = aspectStart + aspectToken.length - 1;
-                let sentimentLabel = senti.sentiment == "Pos" ? "p" : senti.sentiment == "Neu" ? "n" : "neg";
+                let sentimentLabel = senti.sentiment == "Pos" ? "p" : senti.sentiment == "Neu" ? "neu" : "neg";
                 let aspectTag = `[${aspectStart},${aspectEnd},${sentimentLabel}]`;
 
                 // Insert the tag after the aspect token
