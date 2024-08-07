@@ -546,6 +546,14 @@
                 });
             },
             SaveResult: function () {
+                // Find the maximum number of aspects in any sentence
+                let maxAspects = _.chain(ABSADPT.PreABSAData)
+                    .values()
+                    .flatten()
+                    .map(v => v.rvarr.filter(item => item.aspect).length)
+                    .max()
+                    .value();
+            
                 let ABSATrainingSet = _.chain(ABSADPT.PreABSAData)
                     .values()
                     .flatten()
@@ -561,6 +569,12 @@
                             aspectData[`sentiment${index + 1}`] = aspectItem.sentiment;
                         });
             
+                        // Ensure all aspect keys exist even if not all are used
+                        for (let i = aspects.length; i < maxAspects; i++) {
+                            aspectData[`aspect${i + 1}`] = '';
+                            aspectData[`sentiment${i + 1}`] = '';
+                        }
+            
                         return aspectData;
                     })
                     .value();
@@ -574,8 +588,8 @@
                 localStorage.setItem("lastsave", LZipper.compress(JSON.stringify(this.PreABSAData)));
             
                 let saveAs = window.saveAs,
-                    blob1 = new Blob([SATrainingSet], {type: "text/csv"}),
-                    blob2 = new Blob([JSON.stringify(this.PreABSAData)], {type: "application/json"});
+                    blob1 = new Blob([SATrainingSet], { type: "text/csv" }),
+                    blob2 = new Blob([JSON.stringify(this.PreABSAData)], { type: "application/json" });
             
                 saveAs(blob1, "SATrainingSet.csv");
             }
